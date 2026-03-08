@@ -2,33 +2,31 @@
 
 # builtins
 import board, datetime, os, tomllib, asyncio
+import sys
 from time import sleep
 
 # external libraries
-from PIL import Image, ImageDraw, ImageFont
-from kasa import Discover
+import memcache
 import adafruit_sht4x, adafruit_sgp40, adafruit_ssd1306
 from adafruit_sgp40.voc_algorithm import VOCAlgorithm
-import memcache
+from PIL import Image, ImageDraw, ImageFont
+from kasa import Discover
 
-shared = memcache.Client(['127.0.0.1:11211'], debug=0)
-
-import sys
 
 class TempSensor:
     def __init__(self, i2c):
         print('SHT41: Initializing')
         self._sht = adafruit_sht4x.SHT4x(i2c)
         self._sht.reset()
-        print(f'SHT41: Serial Number {hex(self._sht.serial_number)}')
 
-        print('SHT41: One second high heat measurement...', end='')
+        print(f'SHT41: Serial Number {hex(self._sht.serial_number)}')
+        print('SHT41: Initial measurement (one second, high heat)...', end='')
         self._sht.mode = adafruit_sht4x.Mode.HIGHHEAT_1S
         tempc, rh = self.measure()
         print(f'Temp: {tempc:.1f} RH: {rh:.0f}')
 
         self._sht.mode = adafruit_sht4x.Mode.NOHEAT_HIGHPRECISION
-        print(f'SHT41: Mode is {adafruit_sht4x.Mode.string[self._sht.mode]}')
+        print(f'SHT41: Measurement mode set to {adafruit_sht4x.Mode.string[self._sht.mode]}')
 
     def measure(self):
         tempc, rh = self._sht.measurements
@@ -42,9 +40,7 @@ class VOCSensor:
         self._vocalgorithm = VOCAlgorithm()
         self._vocalgorithm.vocalgorithm_init()
 
-    def __del__(self):
-        print('SGP40: Turning heater off...')
-        self.turn_heater_off()
+    #def __del__(self):
 
     def turn_heater_off(self):
         self._sgp._command_buffer[0] = 0x36
@@ -59,7 +55,7 @@ class VOCSensor:
 
 class Display:
     def __init__(self, i2c):
-        print('Display: Initializing...')
+        print('Display: Initializing...', end='')
         self._disp = adafruit_ssd1306.SSD1306_I2C(128, 32, i2c)
         self._disp.contrast(1)
         self.clear()
@@ -73,18 +69,16 @@ class Display:
                                          'dejavu/DejaVuSansMono.ttf', 16)
         print()
 
-    def __del__(self):
-        print('Clearing display...')
-        self.clear()
+    #def __del__(self):
 
     @property
     def enabled(self):
         return self._enabled
 
     @enabled.setter
-    def enabled(self, v):
-        if self._enabled != v:
-            self._enabled = v
+    def enabled(self, en):
+        if self._enabled != en:
+            self._enabled = en
             if not self._enabled:
                 self.clear()
 
@@ -92,7 +86,7 @@ class Display:
         self._disp.fill(0)
         self._disp.show()
 
-    def update(self, tempc, rh, vocraw, vocindex):
+    def writedata(self, tempc, rh, vocraw, vocindex):
         if self._enabled:
             # Generate blank rectangle image
             self._draw.rectangle((0, 0, self._disp.width, self._disp.height),
@@ -120,7 +114,7 @@ def update(now):
         display.enabled = True
     else:
         display.enabled = False
-    display.update(tempc, rh, vocraw, vocindex)
+    display.writedata(tempc, rh, vocraw, vocindex)
 
     #Turn filter on if VOC high, only check every 5 seconds
     if now.second % 5 == 0:
@@ -136,35 +130,31 @@ def update(now):
     vocstring = f'V {vocraw} {vocindex}'
     filterstring = f'F {shared.get("filter")}'
     printerstring = f'P {shared.get("temp_hotend"):.1f} {shared.get("temp_hotend_tgt"):.1f} ' + \
-            f'{shared.get("temp_bed"):.1f} {shared.get("temp_bed_tgt"):.1f} ' + \
-          f'{shared.get("status")} {shared.get("printpct")}'
+                    f'{shared.get("temp_bed"):.1f} {shared.get("temp_bed_tgt"):.1f} ' + \
+                    f'{shared.get("status")} {shared.get("printpct")}'
     logstring = ' '.join([timedatestring, tempstring, vocstring, filterstring, printerstring])
     print(logstring)
-    with open(os.path.join(os.getcwd(), 'logs', now.strftime('%Y-%m-%d.log')), 'at') as fo:
+    with open(os.path.join(sys.path[0], 'logs', now.strftime('%Y-%m-%d.log')), 'at') as fo:
         fo.write(f'{logstring}\n')
 
 
-
-
 if __name__ == '__main__':
-#async def main():
-    #global kasaswitch, tempsensor, vocsensor, display, bambu_client
 
-    with open ('.vocconfig.toml', 'rb') as f:
+    with open (os.path.join(sys.path[0],'.vocconfig.toml'), 'rb') as f:
         configdata = tomllib.load(f)
 
-    # initialize devices
-    i2c = board.I2C()
-    tempsensor = TempSensor(i2c)
-    vocsensor = VOCSensor(i2c)
-    display = Display(i2c)
-
+    shared = memcache.Client([configdata['memcache']['ip']], debug=0)
     try:
         asyncioloop = asyncio.get_running_loop()
     except RuntimeError:
         asyncioloop = asyncio.new_event_loop()
     asyncio.set_event_loop(asyncioloop)
 
+    # initialize devices
+    i2c = board.I2C()
+    tempsensor = TempSensor(i2c)
+    vocsensor = VOCSensor(i2c)
+    display = Display(i2c)
     kasaswitch = asyncioloop.run_until_complete(Discover.discover_single(host=configdata['kasa']['ip'],
                                                 username=configdata['kasa']['id'],
                                                 password=configdata['kasa']['pass']))
@@ -172,23 +162,28 @@ if __name__ == '__main__':
     asyncioloop.run_until_complete(kasaswitch.turn_off())
     shared.set('filter', 0)
 
+    try:
+        while True:
+            tpreupdate = datetime.datetime.now()
+            if os.path.exists(os.path.join(sys.path[0],'vocstop')):
+                break
 
-    while True:
-        if os.path.exists('vocstop'):
-            break
+            update(tpreupdate)
+            tpostupdate = datetime.datetime.now()
 
-        tpreupdate = datetime.datetime.now()
-        update(tpreupdate)
-        tpostupdate = datetime.datetime.now()
+            dtime = 1.0 - (tpostupdate - tpreupdate).total_seconds()
+            if dtime > 0:
+                sleep(dtime)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        print('Shutting down...')
+        print('SGP40: Turning heater off...')
+        vocsensor.turn_heater_off()
+        print('Turning off Kasa switch')
+        asyncioloop.run_until_complete(kasaswitch.turn_off())
+        asyncioloop.run_until_complete(kasaswitch.disconnect())
+        print('Display: Clearing')
+        display.clear()
+        os.remove(os.path.join(sys.path[0],'vocstop'))
 
-        dtime = 1.0 - (tpostupdate - tpreupdate).total_seconds()
-        sleep(dtime)
-
-    print('Shutting down...')
-    print('Turning off Kasa switch')
-    asyncioloop.run_until_complete(kasaswitch.turn_off())
-    asyncioloop.run_until_complete(kasaswitch.disconnect())
-    os.remove('vocstop')
-
-
-    #asyncio.run(main())

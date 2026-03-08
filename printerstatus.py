@@ -43,10 +43,10 @@ def bambu_connect_callback():
 
 
 if __name__ == '__main__':
-    with open ('.vocconfig.toml', 'rb') as f:
+    with open (os.path.join(sys.path[0],'.vocconfig.toml'), 'rb') as f:
         configdata = tomllib.load(f)
 
-    shared = memcache.Client(['127.0.0.1:11211'], debug=0)
+    shared = memcache.Client([configdata['memcache']['ip']], debug=0)
     shared.set('temp_hotend', 0)
     shared.set('temp_hotend_tgt', 0)
     shared.set('temp_bed', 0)
@@ -61,7 +61,7 @@ if __name__ == '__main__':
         bambu_client.start_watch_client(bambu_status_callback, bambu_connect_callback)
 
         while True:
-            sleep(1)
+            sleep(0.5)
     except KeyboardInterrupt:
         pass
     finally:
