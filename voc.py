@@ -3,7 +3,7 @@
 # builtins
 import board, datetime, os, tomllib, asyncio
 import sys
-from time import sleep
+from time import sleep,time
 
 # external libraries
 import memcache
@@ -39,6 +39,8 @@ class VOCSensor:
         self._sgp = adafruit_sgp40.SGP40(i2c)
         self._vocalgorithm = VOCAlgorithm()
         self._vocalgorithm.vocalgorithm_init()
+        #initial measurement just to get the sensor running
+        trash = self._sgp.measure_raw()
 
     #def __del__(self):
 
@@ -105,7 +107,8 @@ class Display:
             self._disp.show()
 
 
-def update(now):
+def update():
+    now = datetime.datetime.now()
     tempc, rh = tempsensor.measure()
     vocraw, vocindex = vocsensor.measure(tempc, rh)
 
@@ -164,14 +167,14 @@ if __name__ == '__main__':
 
     try:
         while True:
-            tpreupdate = datetime.datetime.now()
+            tpreupdate = time()
             if os.path.exists(os.path.join(sys.path[0],'vocstop')):
                 break
 
-            update(tpreupdate)
-            tpostupdate = datetime.datetime.now()
+            update()
+            #tpostupdate = datetime.datetime.now()
 
-            dtime = 1.0 - (tpostupdate - tpreupdate).total_seconds()
+            dtime = 1.0 - (time() - tpreupdate)
             if dtime > 0:
                 sleep(dtime)
     except KeyboardInterrupt:
@@ -185,5 +188,6 @@ if __name__ == '__main__':
         asyncioloop.run_until_complete(kasaswitch.disconnect())
         print('Display: Clearing')
         display.clear()
-        os.remove(os.path.join(sys.path[0],'vocstop'))
+        if os.path.exists(os.path.join(sys.path[0],'vocstop')):
+            os.remove(os.path.join(sys.path[0],'vocstop'))
 
