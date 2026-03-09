@@ -107,8 +107,7 @@ class Display:
             self._disp.show()
 
 
-def update():
-    now = datetime.datetime.now()
+def update(now):
     tempc, rh = tempsensor.measure()
     vocraw, vocindex = vocsensor.measure(tempc, rh)
 
@@ -121,10 +120,11 @@ def update():
 
     #Turn filter on if VOC high, only check every 5 seconds
     if now.second % 5 == 0:
-        if vocindex > 150:
+        filteron = shared.get('filter')
+        if vocindex >= 150 and filteron == 0:
             asyncioloop.run_until_complete(kasaswitch.turn_on())
             shared.set('filter', 1)
-        else:
+        elif vocindex < 150 and filteron == 1:
             asyncioloop.run_until_complete(kasaswitch.turn_off())
             shared.set('filter', 0)
 
@@ -165,13 +165,17 @@ if __name__ == '__main__':
     asyncioloop.run_until_complete(kasaswitch.turn_off())
     shared.set('filter', 0)
 
+    logpath = os.path.join(sys.path[0], 'logs')
+
     try:
         while True:
             tpreupdate = time()
+
+            now = datetime.datetime.now()
             if os.path.exists(os.path.join(sys.path[0],'vocstop')):
                 break
 
-            update()
+            update(now)
             #tpostupdate = datetime.datetime.now()
 
             dtime = 1.0 - (time() - tpreupdate)
