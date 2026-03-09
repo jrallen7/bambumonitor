@@ -40,7 +40,12 @@ class VOCSensor:
         self._vocalgorithm = VOCAlgorithm()
         self._vocalgorithm.vocalgorithm_init()
         #initial measurement just to get the sensor running
-        trash = self._sgp.measure_raw()
+        print('SGP40: Running 5 measurements')
+        for i in range(5):
+            trash = self._sgp.measure_raw()
+        print('SGP40: Seeding Algorithm History')
+        self.seedhistory()
+        print('SGP40: Done')
 
     #def __del__(self):
 
@@ -54,6 +59,26 @@ class VOCSensor:
         vocindex = self._vocalgorithm.vocalgorithm_process(vocraw)
         return vocraw, vocindex
 
+    def seedhistory(self):
+        n = datetime.datetime.now()
+        ii = 0
+        for dd in [-1, 0]:
+            logfname = (n + datetime.timedelta(days=dd)).strftime('%Y-%m-%d.log')
+            with open(os.path.join(sys.path[0], 'logs', logfname), 'rt') as fi:
+                for l in fi:
+                    l = l.strip().split()
+                    try:
+                        i = l.index('V')
+                        vraw = int(l[i+1])
+                        if vraw != 0:
+                            vocindex = self._vocalgorithm.vocalgorithm_process(vraw)
+                            ii += 1
+        #                    print(ii)
+                            if ii%100 == 0:
+                                print('.', end='', flush=True)
+                    except ValueError:
+                        pass
+        print(f'Seeded {ii} Values')
 
 class Display:
     def __init__(self, i2c):
