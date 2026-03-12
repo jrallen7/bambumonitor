@@ -94,10 +94,10 @@ class Display:
         self._image = Image.new("1", (self._disp.width, self._disp.height))
         self._draw = ImageDraw.Draw(self._image)
         self._font1 = ImageFont.truetype(
-            "/usr/share/fonts/truetype/" + "dejavu/DejaVuSansMono.ttf", 12
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", 12
         )
         self._font2 = ImageFont.truetype(
-            "/usr/share/fonts/truetype/" + "dejavu/DejaVuSansMono.ttf", 16
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", 16
         )
         print()
 
