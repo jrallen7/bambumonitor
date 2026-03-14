@@ -75,7 +75,7 @@ if __name__ == "__main__":
     for f in bambu_fields:
         if f not in temp:
             client_cache.set(f, 0)
-    client_cache.set('bambu_fields', bambu_fields)
+    client_cache.set("bambu_fields", bambu_fields)
 
     # main loop
     try:

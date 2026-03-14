@@ -147,7 +147,7 @@ def update(now):
     vocraw, vocindex = vocsensor.measure(tempc, rh)
 
     # Display only on for 2 out of 10 seconds to prevent aging
-    display.enabled = (now.second % 10 < 2)
+    display.enabled = now.second % 10 < 2
     display.writedata(tempc, rh, vocraw, vocindex)
 
     # Turn filter on if VOC high, only check every 5 seconds
@@ -161,17 +161,19 @@ def update(now):
             client_cache.set("filter", 0)
 
     # get cache data
-    cachedata = client_cache.get_multi(bambu_fields+["filter"])
+    cachedata = client_cache.get_multi(bambu_fields + ["filter"])
 
     timedatestring = now.astimezone().isoformat(timespec="milliseconds")
     tempstring = f"T {tempc:.1f} RH {rh:.1f}"
     vocstring = f"V {vocraw} {vocindex}"
-    filterstring = 'F {filter}'.format(**cachedata)
-    printerstring =" ".join(["P",
-        "{nozzle_temper:.1f} {nozzle_target_temper:.1f}",
-        "{bed_temper:.1f} {bed_target_temper:.1f}",
-        "{mc_print_stage} {mc_percent}",
-                             ]
+    filterstring = "F {filter}".format(**cachedata)
+    printerstring = " ".join(
+        [
+            "P",
+            "{nozzle_temper:.1f} {nozzle_target_temper:.1f}",
+            "{bed_temper:.1f} {bed_target_temper:.1f}",
+            "{mc_print_stage} {mc_percent}",
+        ]
     ).format(**cachedata)
     logstring = " ".join(
         [timedatestring, tempstring, vocstring, filterstring, printerstring]
@@ -189,7 +191,7 @@ if __name__ == "__main__":
         configdata = tomllib.load(f)
 
     client_cache = Client(serde=serde.pickle_serde, **configdata["memcache"])
-    bambu_fields = client_cache.get('bambu_fields')
+    bambu_fields = client_cache.get("bambu_fields")
 
     try:
         asyncioloop = asyncio.get_running_loop()
